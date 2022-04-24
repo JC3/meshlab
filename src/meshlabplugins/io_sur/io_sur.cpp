@@ -72,7 +72,7 @@ void SurIOPlugin::save(const QString & formatName, const QString &fileName, Mesh
 
 QString SurIOPlugin::pluginName() const
 {
-    return "IOSUR";
+    return "IOSUR-v1.0.1";
 }
 
 QString SurIOPlugin::vendor() const {
@@ -113,7 +113,7 @@ void writeSUR(QString filename, CMeshO &m, QString name) {
     for (const auto &vert : m.vert) {
         const auto &pos = vert.cP();
         //file.write(QString("%1 %2 %3\n").arg(pos[0]).arg(pos[1]).arg(pos[2]).toLatin1());
-        file.write(QString().sprintf("%f %f %f\n", pos[0], pos[1], pos[2]).toLatin1());
+        file.write(QString::asprintf("%f %f %f\n", pos[0], pos[1], pos[2]).toLatin1());
     }
 
     file.write(QString("%1\n").arg(m.face.size()).toLatin1());
@@ -143,9 +143,11 @@ void parseSUR(QString filename, CMeshO &m) {
     unsigned linenum = 0, vcount = 0, tcount = 0, vread = 0, tread = 0;
     const QRegExp space("\\s+");
 
-    while (state != Complete) {
+    while (!file.atEnd()) {
         ++ linenum;
         QString line = QString::fromLatin1(file.readLine()).trimmed();
+        if (file.error() != QFile::NoError)
+            throw MLException("Error reading SUR file: " + file.errorString());
         if (line.isEmpty() || line.startsWith('#'))
             continue;
         QStringList items = line.split(space, Qt::SkipEmptyParts);
@@ -187,6 +189,9 @@ void parseSUR(QString filename, CMeshO &m) {
         if (!ok)
             throw MLException(QString("Error parsing SUR file, line %1").arg(linenum));
     }
+
+    if (state != Complete)
+        throw MLException(QString("Error parsing SUR file, unexpected end of file."));
 
 }
 
