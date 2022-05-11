@@ -21,58 +21,59 @@
 *                                                                           *
 ****************************************************************************/
 
+#define IOSUR_VERSION "v1.0.2"
+
 /* SUR file IO
  * Jason Cipriani <jason.cipriani@smith-nephew.com>
  * Copyright (C) 2022 Smith+Nephew
+ *
+ * CHANGES
+ *
+ *     v1.0.2 - 2022-May-11: temporarily disable comments in output
+ *     v1.0.1 - 2022-Apr-23: fix hang on unexpected input eof
+ *     v1.0.0 - 2022-Apr-22: initial version
+ *
+ * FILE FORMAT
+ *
+ *        vertex_count
+ *        x y z
+ *        ...
+ *        triangle_count
+ *        a b c
+ *        ...
+ *
+ *    Blank lines and lines starting with # are ignored.
+ *    Triangle vertex indices are 0-based.
  */
 
+#include "io_sur.h"
 #include <Qt>
 #include <QDateTime>
 
-#include "io_sur.h"
-
-//#include <wrap/io_trimesh/export.h>
-
 using namespace vcg;
 
-/*
- * i started with a copy of io_txt so please ignore inconsistent code style.
- *
- * file format is:
- *
- *    vertex_count
- *    x y z
- *    ...
- *    triangle_count
- *    a b c
- *    ...
- *
- * blank lines and lines starting with # are ignored.
- * triangle vertex indices are 0-based.
- */
-
 static void parseSUR(QString filename, CMeshO &m);
-static void writeSUR(QString filename, CMeshO &m, QString name);
+static void writeSUR(QString filename, CMeshO &m, QString name, bool comments);
 
 void SurIOPlugin::open(const QString &formatName, const QString &fileName, MeshModel &m, int& mask, const RichParameterList &parlst, CallBackPos * /*cb*/)
 {
     if(formatName.toUpper() == tr("SUR"))
         parseSUR(fileName, m.cm);
     else
-		wrongOpenFormat(formatName);
+        wrongOpenFormat(formatName);
 }
 
 void SurIOPlugin::save(const QString & formatName, const QString &fileName, MeshModel &m, const int /*mask*/, const RichParameterList &, vcg::CallBackPos * /*cb*/)
 {
     if (formatName.toUpper() == tr("SUR"))
-        writeSUR(fileName, m.cm, /* todo  m.fullName()*/ "");
+        writeSUR(fileName, m.cm, QFileInfo(fileName).baseName(), false);
     else
         wrongSaveFormat(formatName);
 }
 
 QString SurIOPlugin::pluginName() const
 {
-    return "IOSUR-v1.0.1";
+    return "IOSUR-" IOSUR_VERSION;
 }
 
 QString SurIOPlugin::vendor() const {
@@ -89,14 +90,14 @@ std::list<FileFormat> SurIOPlugin::exportFormats() const
     return {FileFormat("SUR (the one and only)", tr("SUR"))};
 }
 
-void SurIOPlugin::exportMaskCapability(const QString & /*format*/, int &capability, int &defaultBits) const
+void SurIOPlugin::exportMaskCapability(const QString &formatName, int &capability, int &defaultBits) const
 {
-	capability=defaultBits=0;
-	return;
+    Q_UNUSED(formatName);
+    capability = defaultBits = 0;
 }
  
 
-void writeSUR(QString filename, CMeshO &m, QString name) {
+void writeSUR(QString filename, CMeshO &m, QString name, bool comments) {
 
     QFile file(filename);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
@@ -105,8 +106,10 @@ void writeSUR(QString filename, CMeshO &m, QString name) {
     tri::Allocator<CMeshO>::CompactVertexVector(m);
     tri::Allocator<CMeshO>::CompactFaceVector(m);
 
-    file.write(QString("# %1\n").arg(name).toUtf8());
-    file.write(QString("# Saved with MeshLab on %1\n").arg(QDateTime::currentDateTime().toString()).toUtf8());
+    if (comments) {
+        file.write(QString("# %1\n").arg(name).toUtf8());
+        file.write(QString("# Saved with MeshLab (IOSUR %2) on %1\n").arg(QDateTime::currentDateTime().toString(), IOSUR_VERSION).toUtf8());
+    }
 
     file.write(QString("%1\n").arg(m.vert.size()).toLatin1());
 
